@@ -44,7 +44,7 @@ def main():
 
 	# Get natural questions queries
 	queries = []
-	with open("/n/fs/nlp-jacksond/datasets/nq_open/dev_preprocessed.json") as f:
+	with open("/n/fs/nlp-jacksond/datasets/nq-open/dev_preprocessed.json") as f:
 		nq_data = json.load(f)
 		for query in nq_data["data"]:
 			queries.append(Query(query["id"], query["question"], query["answers"]))
