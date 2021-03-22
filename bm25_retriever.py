@@ -1,10 +1,11 @@
+import json
 import numpy as np
 from pyserini.search import SimpleSearcher
 
 class Query:
-	def __init__(self, qid, query, answers):
+	def __init__(self, qid, question, answers):
 		self.id = qid
-		self.query = query
+		self.question = question
 		self.answers = answers
 
 	def answer_overlap(self, doc):
@@ -43,16 +44,15 @@ def main():
 
 	# Get natural questions queries
 	queries = []
-	query_strings = ["what does hp mean in war and order", "who wrote the first declaration of human rights"]
-	qids = ["test_4", "test_5"]
-	answers = ["hit points or health points", "Cyrus"]
-	for i, q in enumerate(query_strings):
-		queries.append(Query(qids[i], query_strings[i], [answers[i]]))
+	with open("/n/fs/nlp-jacksond/datasets/nq_open/dev_preprocessed.json") as f:
+		nq_data = json.load(f)
+		for query in nq_data["data"]:
+			queries.append(Query(query["id"], query["question"], query["answers"]))
 
 	# Find top documents for each query
 	ranked_queries = {}
 	for q in queries:
-		hits = searcher.search(q.query, 1000)
+		hits = searcher.search(q.question, 1000)
 		docids = [hit.docid.strip() for hit in hits]
 		ranked_queries[q] = docids
 
