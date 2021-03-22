@@ -4,6 +4,8 @@ indexes/
 # Model caches
 models/
 
+# Slurm scripts
+*.slurm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
