@@ -1,4 +1,5 @@
 import json
+import argparse
 import numpy as np
 from pyserini.search import SimpleSearcher
 
@@ -27,7 +28,8 @@ class Query:
 
 def top_k(searcher, ranked_queries, k):
 	acc = []
-	for q, docids in ranked_queries.items():
+	for q, hits in ranked_queries.items():
+		docids = [hit.docid.strip() for hit in hits]
 		answer_possible = 0
 		for docid in docids[:k]:
 			doc = searcher.doc(docid)
@@ -37,30 +39,48 @@ def top_k(searcher, ranked_queries, k):
 	return np.mean(acc)
 
 
-def main():
-	# Initialize searcher from prebuilt wikipedia index
-	searcher = SimpleSearcher('indexes/enwiki-prebuilt')
-	searcher.set_rm3()
+def batch(iterable, n=1):
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
 
-	# Get natural questions queries
+
+if __name__ == "__main__":
+	parser = argparse.ArgumentParser(description='Get top k accuracy for a dataset on wikipedia')
+	parser.add_argument('--input', type=str, required=True,
+		help="Path to input dataset")
+	parser.add_argument('--index', type=str, required=True,
+		help="Path to prebuilt indexes")
+	parser.add_argument('--batch-size', type=int, metavar='num', required=False,
+		default=1, help="Specify batch size to search the collection concurrently.")
+	parser.add_argument('--threads', type=int, metavar='num', required=False,
+		default=1, help="Maximum number of threads to use.")
+	parser.add_argument('--topk', type=int, nargs='+', help="topk to evaluate")
+	args = parser.parse_args()
+
+	# Initialize searcher from prebuilt wikipedia index
+	searcher = SimpleSearcher(args.index)
+
+	# Get queries
 	queries = []
-	with open("/n/fs/nlp-jacksond/datasets/nq-open/dev_preprocessed.json") as f:
-		nq_data = json.load(f)
-		for query in nq_data["data"]:
+	with open(args.input) as f:
+		data = json.load(f)
+		for query in data["data"]:
 			queries.append(Query(query["id"], query["question"], query["answers"]))
 
 	# Find top documents for each query
 	ranked_queries = {}
-	for q in queries:
-		hits = searcher.search(q.question, 1000)
-		docids = [hit.docid.strip() for hit in hits]
-		ranked_queries[q] = docids
+
+	if args.batch_size <= 1 and args.threads <= 1:
+		for q in queries:
+			hits = searcher.search(q.question, 1000)
+			ranked_queries[q] = hits
+	else:
+		for qs in batch(queries, args.batch_size):
+			hits = searcher.batch_search([q.question for q in qs], [q.id for q in qs], 1000, args.threads)
+			ranked_queries.update(hits)
+
 
 	# Print top k accuracy
-	print(f"k=20: {top_k(searcher, ranked_queries, 20)}")
-	print(f"k=100: {top_k(searcher, ranked_queries, 100)}")
-	print(f"k=1000: {top_k(searcher, ranked_queries, 1000)}")
-
-
-if __name__ == "__main__":
-	main()
+	for k in [20, 100, 500, 1000]:
+		print(f"k={k}: {top_k(searcher, ranked_queries, k)}")
