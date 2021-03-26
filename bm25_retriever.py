@@ -68,7 +68,7 @@ if __name__ == "__main__":
 			docid = hit.docid.strip()
 			ctx = json.loads(searcher.doc(docid).raw())['contents']
 			out = {'docid': docid, 'score': hit.score, 'text': ctx}
-			output_dict[q.id]["contexts"].append()
+			output_dict[q.id]["contexts"].append(out)
 
 	with open(args.output, "w+") as f:
 		json.dump(output_dict, f, indent=4)
