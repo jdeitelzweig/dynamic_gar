@@ -62,22 +62,23 @@ if __name__ == "__main__":
 	searcher = SimpleSearcher(args.index)
 
 	# Get queries
-	queries = []
+	queries = {}
 	with open(args.input) as f:
 		data = json.load(f)
 		for query in data["data"]:
-			queries.append(Query(query["id"], query["question"], query["answers"]))
+			queries[query["id"]] = Query(query["id"], query["question"], query["answers"])
 
 	# Find top documents for each query
 	ranked_queries = {}
 
 	if args.batch_size <= 1 and args.threads <= 1:
-		for q in queries:
+		for qid, q in queries.items():
 			hits = searcher.search(q.question, 1000)
 			ranked_queries[q] = hits
 	else:
-		for qs in batch(queries, args.batch_size):
+		for qs in batch(queries.values(), args.batch_size):
 			hits = searcher.batch_search([q.question for q in qs], [q.id for q in qs], 1000, args.threads)
+			hits = {queries[q]: v for q, v in hits.items()}
 			ranked_queries.update(hits)
 
 
