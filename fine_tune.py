@@ -528,14 +528,28 @@ def main():
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
 
-        metrics = trainer.evaluate(
-            max_length=data_args.val_max_target_length, num_beams=data_args.num_beams, metric_key_prefix="eval"
+        eval_results = trainer.predict(
+            test_dataset,
+            metric_key_prefix="eval",
+            max_length=data_args.val_max_target_length,
+            num_beams=data_args.num_beams,
         )
+        metrics = eval_results.metrics
         max_val_samples = data_args.max_val_samples if data_args.max_val_samples is not None else len(eval_dataset)
         metrics["eval_samples"] = min(max_val_samples, len(eval_dataset))
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
+
+        if trainer.is_world_process_zero():
+            if training_args.predict_with_generate:
+                eval_preds = tokenizer.batch_decode(
+                    eval_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                )
+                eval_preds = [pred.strip() for pred in eval_preds]
+                output_eval_preds_file = os.path.join(training_args.output_dir, "eval_generations.txt")
+                with open(output_eval_preds_file, "w") as writer:
+                    writer.write("\n".join(eval_preds))
 
     if training_args.do_predict:
         logger.info("*** Test ***")
