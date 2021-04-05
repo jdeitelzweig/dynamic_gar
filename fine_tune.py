@@ -529,7 +529,7 @@ def main():
         logger.info("*** Evaluate ***")
 
         eval_results = trainer.predict(
-            test_dataset,
+            eval_dataset,
             metric_key_prefix="eval",
             max_length=data_args.val_max_target_length,
             num_beams=data_args.num_beams,
