@@ -15,11 +15,22 @@ def main():
 	model = BartForConditionalGeneration.from_pretrained(args.model)
 	tokenizer = BartTokenizer.from_pretrained(args.model)
 
-	inputs = tokenizer(["when did bat out of hell get released?", "who sings does he love me with reba?", 
-		"what is the name of wonder womans mother?"], max_length=1024, return_tensors='pt')
-	summary_ids = model.generate(inputs['input_ids'], num_beams=4, max_length=5, early_stopping=True)
+	queries = []
+	with open(args.input) as f:
+		data = json.load(f)
+		for query in data["data"]:
+			queries.append(query["question"])
+
+	inputs = tokenizer(queries, max_length=1024, padding="max_length", truncation=True, return_tensors='pt')
+	summary_ids = model.generate(inputs['input_ids'], num_beams=4, max_length=50, early_stopping=True)
 	out = [tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in summary_ids]
-	print(out)
+
+	assert len(out) == len(queries)
+	for query, augment in zip(data["data"], out):
+			query["question"] = query["question"] + " " + augment
+
+	with open(args.output, "w+") as f:
+		json.dump(data, f)
 
 if __name__ == "__main__":
 	main()
