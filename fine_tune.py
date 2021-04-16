@@ -240,9 +240,12 @@ class RLTrainer(Seq2SeqTrainer):
         loss_ml = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
         # generate two sequences, one greedy and one sampled
-        y_s_dict = model.module.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
-        y_hat = model.module.generate(inputs['input_ids'], do_sample=False)
-
+        try:
+            y_s_dict = model.module.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
+            y_hat = model.module.generate(inputs['input_ids'], do_sample=False)
+        except AttributeError:
+            y_s_dict = model.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
+            y_hat = model.generate(inputs['input_ids'], do_sample=False)
         # find logprob of sampled sequence
         loss_rl = y_s_dict.sequences_scores
 
