@@ -29,11 +29,13 @@ def main():
 		batch = queries[idx:min(idx+batch_size, len(queries))]
 		inputs = tokenizer(batch, max_length=1024, padding="max_length", truncation=True, return_tensors='pt')
 		summary_ids = model.generate(inputs['input_ids'], num_beams=4, max_length=50, early_stopping=True)
-		out.extend([tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in summary_ids])
+		out.extend([tokenizer.decode(g, clean_up_tokenization_spaces=False) for g in summary_ids])
 	
 	#assert len(out) == len(queries)
 	print(len(out), len(queries))	
 	for query, augment in zip(data["data"], out):
+		augment = augment.replace("</s>", " ")
+		augment = augment.replace("<s>", "")
 		query["question"] = query["question"] + " " + augment
 
 	with open(args.output, "w+") as f:

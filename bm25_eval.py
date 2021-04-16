@@ -264,6 +264,28 @@ def evaluate_retrieval(retrieval_file, topk, regex=False):
         print(f'Top{k}\taccuracy: {np.mean(accuracy[k])}')
 
 
+def get_contexts(searcher, hits):
+    contexts = []
+    for hit in hits:
+        docid = hit.docid.strip()
+        ctx = json.loads(searcher.doc(docid).raw())['contents']
+        out = {'docid': docid, 'score': hit.score, 'text': ctx}
+        contexts.append(out)
+    return contexts
+
+
+def get_top_k(contexts, answers, k):
+    tokenizer = SimpleTokenizer()
+    accuracy = 0
+    for idx, ctx in enumerate(contexts):
+        if idx >= k:
+            break
+        text = ctx['text'].split('\n')[1]
+        if has_answers(text, answers, tokenizer, regex):
+            accuracy += 1
+    return accuracy/k
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--retrieval', type=str, metavar='path',

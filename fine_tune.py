@@ -46,6 +46,8 @@ from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version
 
 from pyserini.search import SimpleSearcher
+from bm25_eval import get_top_k, get_contexts
+import torch
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -226,16 +228,45 @@ class DataTrainingArguments:
             self.val_max_target_length = self.max_target_length
 
 
-# class RLTrainer(Seq2SeqTrainer):
-#     def compute_loss(self, model, inputs, return_outputs=False):
-#         outputs = model(**inputs)
-#         loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-#         # make this work with the tokenizer somehow
-#         summary_ids = model.generate(inputs['input_ids'], num_beams=4, max_length=5, early_stopping=True)
-#         summary = [tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in summary_ids][0]
-#         hits = searcher.search(q.question, 20)
-#         # eval BM25 here
-#         return (loss, outputs) if return_outputs else loss
+class RLTrainer(Seq2SeqTrainer):
+    def __init__(self, searcher, sc_scaling, topk, *args, **kwargs):
+        super().__init__()
+        self.searcher = searcher
+        self.sc_scaling = sc_scaling
+        self.topk = topk
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        outputs = model(**inputs)
+        loss_ml = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+        y_s = model.generate(inputs['input_ids'], do_sample=True)
+        y_hat = model.generate(inputs['input_ids'], do_sample=False)
+
+        loss_fct = torch.nn.CrossEntropyLoss()
+
+        # the 1: on the y_s is weird, otherwise couldn't get the dimensions to work
+        loss_rl = loss_fct(outputs.logits.view(-1, self.config.vocab_size), y_s[:, 1:].view(-1))
+
+        q_s = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_s][0]
+        q_hat = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_hat][0]
+
+        # eval BM25 here
+        hits_sample = self.searcher.search(q_s, 20)
+        hits_greedy = self.searcher.search(q_hat, 20)
+
+        contexts_sample = get_contexts(self.searcher, hits_sample)
+        contexts_greedy = get_contexts(self.searcher, hits_greedy)
+
+        answers = self.tokenizer.decode(inputs["labels"]).replace("<s>", "").replace("</s>", " ")
+
+        score = get_top_k(contexts_sample, [answers], 20)
+        baseline = get_top_k(contexts_greedy, [answers], 20)
+        loss_rl *= (baseline - score)
+
+        # Mixed training objective
+        loss = self.sc_scaling * loss_rl + (1-self.sc_scaling) * loss_ml
+
+        return (loss, outputs) if return_outputs else loss
 
 
 def main():
@@ -492,7 +523,19 @@ def main():
         return result
 
     # Initialize our Trainer
-    trainer = Seq2SeqTrainer(
+    # trainer = Seq2SeqTrainer(
+    #     model=model,
+    #     args=training_args,
+    #     train_dataset=train_dataset if training_args.do_train else None,
+    #     eval_dataset=eval_dataset if training_args.do_eval else None,
+    #     tokenizer=tokenizer,
+    #     data_collator=data_collator,
+    #     compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+    # )
+
+    searcher = SimpleSearcher("indexes/wiki-dpr-prebuilt")
+
+    trainer = RLTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -500,6 +543,9 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+        searcher=searcher,
+        sc_scaling=0.98,
+        topk=20,
     )
 
     # Training
@@ -544,7 +590,7 @@ def main():
         if trainer.is_world_process_zero():
             if training_args.predict_with_generate:
                 eval_preds = tokenizer.batch_decode(
-                    eval_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    eval_results.predictions, clean_up_tokenization_spaces=True
                 )
                 eval_preds = [pred.strip() for pred in eval_preds]
                 output_eval_preds_file = os.path.join(training_args.output_dir, "eval_generations.txt")
@@ -570,7 +616,7 @@ def main():
         if trainer.is_world_process_zero():
             if training_args.predict_with_generate:
                 test_preds = tokenizer.batch_decode(
-                    test_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+                    test_results.predictions, clean_up_tokenization_spaces=True
                 )
                 test_preds = [pred.strip() for pred in test_preds]
                 output_test_preds_file = os.path.join(training_args.output_dir, "test_generations.txt")
