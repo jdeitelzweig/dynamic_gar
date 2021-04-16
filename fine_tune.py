@@ -230,7 +230,7 @@ class DataTrainingArguments:
 
 class RLTrainer(Seq2SeqTrainer):
     def __init__(self, searcher, sc_scaling, topk, *args, **kwargs):
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.searcher = searcher
         self.sc_scaling = sc_scaling
         self.topk = topk
