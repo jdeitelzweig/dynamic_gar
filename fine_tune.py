@@ -239,16 +239,18 @@ class RLTrainer(Seq2SeqTrainer):
         outputs = model(**inputs)
         loss_ml = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
-        # the 1: may or may not be needed
+        # generate two sequences, one greedy and one sampled
         y_s_dict = model.module.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
         y_hat = model.module.generate(inputs['input_ids'], do_sample=False)
 
+        # find logprob of sampled sequence
         loss_rl = y_s_dict.sequences_scores
 
+        # decode generated sequences to text
         q_s = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_s_dict.sequences]
         q_hat = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_hat]
 
-        # eval BM25 here
+        # eval BM25 for text sequences augmented to inputs
         input_sentences = self.tokenizer.batch_decode(inputs["input_ids"], skip_special_tokens=True, clean_up_tokenization_spaces=False)
         augmented_sample = [sentence + " " + augment for sentence, augment in zip(input_sentences, q_s)]
         augmented_greedy = [sentence + " " + augment for sentence, augment in zip(input_sentences, q_hat)]
@@ -259,11 +261,14 @@ class RLTrainer(Seq2SeqTrainer):
         contexts_sample = get_contexts(self.searcher, hits_sample, batch=True)
         contexts_greedy = get_contexts(self.searcher, hits_greedy, batch=True)
 
-        answers = self.tokenizer.batch_decode(inputs["labels"])
+        # get top k accuracy
+        answers = self.tokenizer.batch_decode(inputs["labels"], clean_up_tokenization_spaces=False)
         answers = [answer.replace("<s>", "").replace("</s>", " ").replace("<pad>", "") for answer in answers]
 
         score = torch.as_tensor(get_top_k(contexts_sample, answers, 20, batch=True))
         baseline = torch.as_tensor(get_top_k(contexts_greedy, answers, 20, batch=True))
+        
+        # weight loss by difference in score (self critical policy gradient)
         loss_rl *= (baseline - score)
         loss_rl = torch.mean(loss_rl)
 
