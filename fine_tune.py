@@ -239,30 +239,33 @@ class RLTrainer(Seq2SeqTrainer):
         outputs = model(**inputs)
         loss_ml = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
 
-        y_s = model.module.generate(inputs['input_ids'], do_sample=True)
+        # the 1: may or may not be needed
+        y_s_dict = model.module.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
         y_hat = model.module.generate(inputs['input_ids'], do_sample=False)
 
-        loss_fct = torch.nn.CrossEntropyLoss()
+        loss_rl = y_s_dict.sequences_scores
 
-        # the 1: on the y_s is weird, otherwise couldn't get the dimensions to work
-        loss_rl = loss_fct(outputs.logits.reshape(-1, model.module.config.vocab_size), y_s[:, 1:].reshape(-1))
-
-        q_s = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_s]
+        q_s = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_s_dict.sequences]
         q_hat = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_hat]
 
         # eval BM25 here
-        hits_sample = self.searcher.batch_search(q_s, [str(i) for i in range(len(q_s))], 20)
-        hits_greedy = self.searcher.batch_search(q_hat, [str(i) for i in range(len(q_hat))], 20)
+        input_sentences = self.tokenizer.batch_decode(inputs["input_ids"], skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        augmented_sample = [sentence + " " + augment for sentence, augment in zip(input_sentences, q_s)]
+        augmented_greedy = [sentence + " " + augment for sentence, augment in zip(input_sentences, q_hat)]
+
+        hits_sample = self.searcher.batch_search(augmented_sample, [str(i) for i in range(len(augmented_sample))], 20)
+        hits_greedy = self.searcher.batch_search(augmented_greedy, [str(i) for i in range(len(augmented_greedy))], 20)
 
         contexts_sample = get_contexts(self.searcher, hits_sample, batch=True)
         contexts_greedy = get_contexts(self.searcher, hits_greedy, batch=True)
 
-        answers = self.tokenizer.decode(inputs["labels"])
-        answers = [answer.replace("<s>", "").replace("</s>", " ") for answer in answers]
+        answers = self.tokenizer.batch_decode(inputs["labels"])
+        answers = [answer.replace("<s>", "").replace("</s>", " ").replace("<pad>", "") for answer in answers]
 
-        score = torch.as_tensor(get_top_k(contexts_sample, [answers], 20, batch=True))
-        baseline = torch.as_tensor(get_top_k(contexts_greedy, [answers], 20, batch=True))
+        score = torch.as_tensor(get_top_k(contexts_sample, answers, 20, batch=True))
+        baseline = torch.as_tensor(get_top_k(contexts_greedy, answers, 20, batch=True))
         loss_rl *= (baseline - score)
+        loss_rl = torch.mean(loss_rl)
 
         # Mixed training objective
         loss = self.sc_scaling * loss_rl + (1-self.sc_scaling) * loss_ml
