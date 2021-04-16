@@ -245,7 +245,7 @@ class RLTrainer(Seq2SeqTrainer):
         loss_fct = torch.nn.CrossEntropyLoss()
 
         # the 1: on the y_s is weird, otherwise couldn't get the dimensions to work
-        loss_rl = loss_fct(outputs.logits.view(-1, self.config.vocab_size), y_s[:, 1:].view(-1))
+        loss_rl = loss_fct(outputs.logits.view(-1, model.module.config.vocab_size), y_s[:, 1:].view(-1))
 
         q_s = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_s][0]
         q_hat = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in y_hat][0]
