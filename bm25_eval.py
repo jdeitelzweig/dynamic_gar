@@ -264,26 +264,50 @@ def evaluate_retrieval(retrieval_file, topk, regex=False):
         print(f'Top{k}\taccuracy: {np.mean(accuracy[k])}')
 
 
-def get_contexts(searcher, hits):
-    contexts = []
-    for hit in hits:
-        docid = hit.docid.strip()
-        ctx = json.loads(searcher.doc(docid).raw())['contents']
-        out = {'docid': docid, 'score': hit.score, 'text': ctx}
-        contexts.append(out)
+def get_contexts(searcher, hits, batch=False):    
+    if not batch:
+        contexts = []
+        for hit in hits:
+            docid = hit.docid.strip()
+            ctx = json.loads(searcher.doc(docid).raw())['contents']
+            out = {'docid': docid, 'score': hit.score, 'text': ctx}
+            contexts.append(out)
+    else:
+        contexts = []
+        for key in sorted(hits):
+            contexts.append([])
+            for hit in hits[key]:
+                docid = hit.docid.strip()
+                ctx = json.loads(searcher.doc(docid).raw())['contents']
+                out = {'docid': docid, 'score': hit.score, 'text': ctx}
+                contexts[int(key)].append(out)
     return contexts
 
 
-def get_top_k(contexts, answers, k):
+def get_top_k(contexts, answers, k, batch=False):
     tokenizer = SimpleTokenizer()
-    accuracy = 0
-    for idx, ctx in enumerate(contexts):
-        if idx >= k:
-            break
-        text = ctx['text'].split('\n')[1]
-        if has_answers(text, answers, tokenizer, regex):
-            accuracy += 1
-    return accuracy/k
+    if not batch:
+        accuracy = 0
+        for idx, ctx in enumerate(contexts):
+            if idx >= k:
+                break
+            text = ctx['text'].split('\n')[1]
+            if has_answers(text, answers, tokenizer, regex):
+                accuracy += 1
+        return accuracy/k
+    accuracy = []
+    for context, answer in zip(contexts, answers):
+        cur_accuracy = 0
+        for idx, ctx in enumerate(context):
+            if idx >= k:
+                break
+            text = ctx['text'].split('\n')[1]
+            if has_answers(text, [answer], tokenizer, regex):
+                cur_accuracy += 1
+        accuracy.append(cur_accuracy/k)
+    return accuracy
+
+
 
 
 if __name__ == '__main__':
