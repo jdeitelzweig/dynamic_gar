@@ -272,9 +272,9 @@ class RLTrainer(Seq2SeqTrainer):
         answers = self.tokenizer.batch_decode(fixed_labels, clean_up_tokenization_spaces=False)
         answers = [answer.replace("<s>", "").replace("</s>", " ").replace("<pad>", "") for answer in answers]
 
-        score = torch.as_tensor(get_top_k(contexts_sample, answers, 20, batch=True))
-        baseline = torch.as_tensor(get_top_k(contexts_greedy, answers, 20, batch=True))
-        
+        score = torch.as_tensor(get_top_k(contexts_sample, answers, 20, batch=True), device=loss_rl.device)
+        baseline = torch.as_tensor(get_top_k(contexts_greedy, answers, 20, batch=True), device=loss_rl.device)
+
         # weight loss by difference in score (self critical policy gradient)
         loss_rl *= (baseline - score)
         loss_rl = torch.mean(loss_rl)
