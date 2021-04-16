@@ -265,7 +265,11 @@ class RLTrainer(Seq2SeqTrainer):
         contexts_greedy = get_contexts(self.searcher, hits_greedy, batch=True)
 
         # get top k accuracy
-        answers = self.tokenizer.batch_decode(inputs["labels"], clean_up_tokenization_spaces=False)
+        # fix padding issues
+        fixed_labels = [
+                [(l if l != -100 else self.tokenizer.pad_token_id) for l in label] for label in inputs["labels"]
+            ]
+        answers = self.tokenizer.batch_decode(fixed_labels, clean_up_tokenization_spaces=False)
         answers = [answer.replace("<s>", "").replace("</s>", " ").replace("<pad>", "") for answer in answers]
 
         score = torch.as_tensor(get_top_k(contexts_sample, answers, 20, batch=True))
