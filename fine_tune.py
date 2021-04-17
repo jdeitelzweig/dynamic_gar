@@ -229,11 +229,12 @@ class DataTrainingArguments:
 
 
 class RLTrainer(Seq2SeqTrainer):
-    def __init__(self, searcher, sc_scaling, topk, *args, **kwargs):
+    def __init__(self, searcher, sc_scaling, topk, max_gen_length, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.searcher = searcher
         self.sc_scaling = sc_scaling
         self.topk = topk
+        self.max_gen_length = max_gen_length
 
     def compute_loss(self, model, inputs, return_outputs=False):
         outputs = model(**inputs)
@@ -241,8 +242,8 @@ class RLTrainer(Seq2SeqTrainer):
 
         # generate two sequences, one greedy and one sampled
         try:
-            y_s_dict = model.module.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
-            y_hat = model.module.generate(inputs['input_ids'], do_sample=False)
+            y_s_dict = model.module.generate(inputs['input_ids'], max_length=max_gen_length, do_sample=True, output_scores=True, return_dict_in_generate=True)
+            y_hat = model.module.generate(inputs['input_ids'], max_length=max_gen_length, do_sample=False)
         except AttributeError:
             y_s_dict = model.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
             y_hat = model.generate(inputs['input_ids'], do_sample=False)
@@ -562,6 +563,7 @@ def main():
         searcher=searcher,
         sc_scaling=0.98,
         topk=20,
+        max_gen_length=None,
     )
 
     # Training
