@@ -242,8 +242,8 @@ class RLTrainer(Seq2SeqTrainer):
 
         # generate two sequences, one greedy and one sampled
         try:
-            y_s_dict = model.module.generate(inputs['input_ids'], max_length=max_gen_length, do_sample=True, output_scores=True, return_dict_in_generate=True)
-            y_hat = model.module.generate(inputs['input_ids'], max_length=max_gen_length, do_sample=False)
+            y_s_dict = model.module.generate(inputs['input_ids'], max_length=self.max_gen_length, do_sample=True, output_scores=True, return_dict_in_generate=True)
+            y_hat = model.module.generate(inputs['input_ids'], max_length=self.max_gen_length, do_sample=False)
         except AttributeError:
             y_s_dict = model.generate(inputs['input_ids'], do_sample=True, output_scores=True, return_dict_in_generate=True)
             y_hat = model.generate(inputs['input_ids'], do_sample=False)
