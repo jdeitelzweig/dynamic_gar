@@ -547,6 +547,7 @@ def main():
 
     # Initialize our Trainer
     if data_args.sc_scaling == 0:
+        logger.info("*** Using Seq2SeqTrainer ***")
         trainer = Seq2SeqTrainer(
             model=model,
             args=training_args,
@@ -557,6 +558,7 @@ def main():
             compute_metrics=compute_metrics if training_args.predict_with_generate else None,
         )
     else:
+        logger.info("*** Using RLTrainer ***")
         searcher = SimpleSearcher("indexes/wiki-dpr-prebuilt")
 
         trainer = RLTrainer(
