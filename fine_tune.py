@@ -546,7 +546,7 @@ def main():
         return result
 
     # Initialize our Trainer
-    if data_args.sc_scaling == 0:
+    if data_args.sc_scaling_factor == 0:
         logger.info("*** Using Seq2SeqTrainer ***")
         trainer = Seq2SeqTrainer(
             model=model,
@@ -570,7 +570,7 @@ def main():
             data_collator=data_collator,
             compute_metrics=compute_metrics if training_args.predict_with_generate else None,
             searcher=searcher,
-            sc_scaling=data_args.sc_scaling,
+            sc_scaling=data_args.sc_scaling_factor,
             topk=20,
             max_gen_length=None,
         )
