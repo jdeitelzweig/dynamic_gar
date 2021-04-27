@@ -204,6 +204,12 @@ class DataTrainingArguments:
             "which is used during ``evaluate`` and ``predict``."
         },
     )
+    sc_scaling_factor: Optional[float] = field(
+        default=0,
+        metadata={
+            "help": "The scaling factor for using the reinforcement learning mixed learning objective."
+        },
+    )
     ignore_pad_token_for_loss: bool = field(
         default=True,
         metadata={
@@ -540,31 +546,32 @@ def main():
         return result
 
     # Initialize our Trainer
-    # trainer = Seq2SeqTrainer(
-    #     model=model,
-    #     args=training_args,
-    #     train_dataset=train_dataset if training_args.do_train else None,
-    #     eval_dataset=eval_dataset if training_args.do_eval else None,
-    #     tokenizer=tokenizer,
-    #     data_collator=data_collator,
-    #     compute_metrics=compute_metrics if training_args.predict_with_generate else None,
-    # )
+    if data_args.sc_scaling == 0:
+        trainer = Seq2SeqTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+        )
+    else:
+        searcher = SimpleSearcher("indexes/wiki-dpr-prebuilt")
 
-    searcher = SimpleSearcher("indexes/wiki-dpr-prebuilt")
-
-    trainer = RLTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=eval_dataset if training_args.do_eval else None,
-        tokenizer=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics if training_args.predict_with_generate else None,
-        searcher=searcher,
-        sc_scaling=0.98,
-        topk=20,
-        max_gen_length=None,
-    )
+        trainer = RLTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+            searcher=searcher,
+            sc_scaling=data_args.sc_scaling,
+            topk=20,
+            max_gen_length=None,
+        )
 
     # Training
     if training_args.do_train:
