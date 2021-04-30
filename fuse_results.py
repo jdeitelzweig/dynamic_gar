@@ -1,4 +1,5 @@
 import json
+from tqdm import tqdm
 import argparse
 
 def main():
@@ -15,8 +16,7 @@ def main():
 	out = {}
 
 	# Loop through questions (each document should have same)
-	for qid in context_dicts[0]:
-		print(f"question {qid}")
+	for qid in tqdm(context_dicts[0]):
 		fused_contexts = []
 		context_nums = [0] * len(context_dicts)
 		# Loop through documents
@@ -27,13 +27,11 @@ def main():
 		finished_documents = set()
 
 		while len(fused_contexts) < args.k:
-			print(f"Document {i}")
 			if len(finished_documents) == len(context_dicts):
 				break
 
 			# Get context from document i
 			if context_nums[i] >= len(context_dicts[i][qid]["contexts"]):
-				print(f"exhausted document {i}")
 				finished_documents.add(i)
 				i = (i + 1) % len(context_dicts)
 				continue
