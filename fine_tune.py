@@ -138,6 +138,9 @@ class DataTrainingArguments:
             "help": "An optional input test data file to evaluate the metrics (rouge) on " "(a jsonlines or csv file)."
         },
     )
+    index_file: Optional[str] = field(
+        default=None, metadata={"help": "The index to use for RL training."}
+    )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
@@ -559,7 +562,7 @@ def main():
         )
     else:
         logger.info("*** Using RLTrainer ***")
-        searcher = SimpleSearcher("indexes/wiki-dpr-prebuilt")
+        searcher = SimpleSearcher(data_args.index_file)
 
         trainer = RLTrainer(
             model=model,
